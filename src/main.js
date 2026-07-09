@@ -381,13 +381,18 @@ fBooks.add(bookParams, 'stacks', 0, 0.6, 0.01).name('flat stacks').onChange(rebu
 fBooks.add(bookParams, 'messiness', 0, 1, 0.01).onChange(rebuildBooks);
 fBooks.add(bookParams, 'scale', 0.7, 1.4, 0.01).name('book size').onChange(rebuildBooks);
 fBooks.add(bookParams, 'seed', 0, 9999, 1).onChange(rebuildBooks);
-fBooks.add({
-  reseed: () => {
-    bookParams.seed = Math.floor(Math.random() * 10000);
-    gui.controllersRecursive().forEach((c) => c.updateDisplay());
-    rebuildBooks();
-  },
-}, 'reseed').name('🎲 new seed');
+function randomizeBooks() {
+  const r = (a, b) => a + Math.random() * (b - a);
+  bookParams.seed = Math.floor(Math.random() * 10000);
+  bookParams.density = +r(0.45, 1).toFixed(2);
+  bookParams.lean = +r(0, 0.5).toFixed(2);
+  bookParams.stacks = +r(0, 0.45).toFixed(2);
+  bookParams.messiness = +r(0.1, 0.9).toFixed(2);
+  bookParams.scale = +r(0.8, 1.25).toFixed(2);
+  gui.controllersRecursive().forEach((c) => c.updateDisplay());
+  rebuildBooks();
+}
+fBooks.add({ randomizeBooks }, 'randomizeBooks').name('🎲 randomize books');
 fBooks.add(bookParams, 'grab').name('✋ grab & throw');
 fBooks.add(bookParams, 'throwPower', 0.5, 3, 0.05).name('throw power');
 fBooks.add({ quake: () => booksSys.bookquake() }, 'quake').name('💥 bookquake');
