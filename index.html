@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Procedural Bookcase — Three.js</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #131417; }
+    #app { position: fixed; inset: 0; }
+    .caption {
+      position: fixed; left: 18px; bottom: 16px;
+      font: 500 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: rgba(255, 255, 255, 0.4); letter-spacing: 0.08em; text-transform: uppercase;
+      pointer-events: none; user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div class="caption">procedural bookcase &middot; three.js</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
