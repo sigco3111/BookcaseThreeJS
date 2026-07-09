@@ -89,7 +89,8 @@ export function createStudio(scene, renderer, target) {
   rim.lookAt(target);
   scene.add(rim);
 
-  const cyc = buildCyclorama();
+  const floor = buildFloor();
+  const cyc = floor.mesh;
   scene.add(cyc);
 
   const dust = createDust();
@@ -102,48 +103,34 @@ export function createStudio(scene, renderer, target) {
     dust.update(t);
   }
 
-  return { key, fill, rim, cyc, dust, shaft, update };
+  return { key, fill, rim, cyc, dust, shaft, update, setFloorHorizon: floor.setHorizon };
 }
 
-// seamless studio backdrop: floor sweeping up into the wall with a filleted curve
-function buildCyclorama({
-  width = 18, front = 7, radius = 1.4, wallH = 7, zWall = -1.9, color = 0x131417,
-} = {}) {
-  const profile = []; // [y, z] pairs, front floor -> arc -> top of wall
-  profile.push([0, front]);
-  profile.push([0, zWall + radius]);
-  const N = 24;
-  for (let i = 1; i <= N; i++) {
-    const a = (i / N) * Math.PI / 2;
-    profile.push([radius - radius * Math.cos(a), zWall + radius - radius * Math.sin(a)]);
-  }
-  profile.push([wallH, zWall]);
-
-  const positions = [];
-  const uvs = [];
-  const indices = [];
-  profile.forEach(([y, z], i) => {
-    positions.push(-width / 2, y, z, width / 2, y, z);
-    const v = i / (profile.length - 1);
-    uvs.push(0, v, 1, v);
-  });
-  for (let i = 0; i < profile.length - 1; i++) {
-    const a = i * 2, b = a + 1, c = a + 2, d = a + 3;
-    indices.push(a, b, c, b, d, c);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-  geo.setIndex(indices);
-  geo.computeVertexNormals();
-
+// flat ground plane with a baked-in horizon fade: past `near` metres from the
+// centre the floor blends toward the backdrop colour, fully dissolving by `far`
+// (well inside the plane's edge) so the rim is never visible — independent of
+// scene fog. setHorizon() re-tints it to match the backdrop on every change.
+function buildFloor({ size = 60, color = 0x131417, near = 8, far = 27 } = {}) {
+  const geo = new THREE.PlaneGeometry(size, size);
+  geo.rotateX(-Math.PI / 2);
   const mat = new THREE.MeshStandardMaterial({
     color, roughness: 0.9, metalness: 0, envMapIntensity: 0.25,
   });
+  const horizon = { value: new THREE.Color(color) };
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uHorizonColor = horizon;
+    shader.uniforms.uHorizonNear = { value: near };
+    shader.uniforms.uHorizonFar = { value: far };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHorizonWorld;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vHorizonWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHorizonWorld;\nuniform vec3 uHorizonColor;\nuniform float uHorizonNear;\nuniform float uHorizonFar;')
+      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  float _hd = length(vHorizonWorld.xz);\n  float _hf = smoothstep(uHorizonNear, uHorizonFar, _hd);\n  gl_FragColor.rgb = mix(gl_FragColor.rgb, uHorizonColor, _hf);');
+  };
   const mesh = new THREE.Mesh(geo, mat);
   mesh.receiveShadow = true;
-  return mesh;
+  return { mesh, setHorizon: (c) => horizon.value.set(c) };
 }
 
 // floating dust motes drifting through the light
@@ -207,7 +194,7 @@ function createLightShaft(lightPos, floorTarget) {
   dir.normalize();
 
   const radius = Math.tan(0.5) * len * 0.85;
-  const geo = new THREE.ConeGeometry(radius, len, 48, 1, true);
+  const geo = new THREE.ConeGeometry(radius, len, 96, 1, true);
 
   const mat = new THREE.ShaderMaterial({
     transparent: true,
@@ -217,14 +204,18 @@ function createLightShaft(lightPos, floorTarget) {
     uniforms: {
       uColor: { value: new THREE.Color(0xffd9a3) },
       uOpacity: { value: 0.16 },
+      uFloorY: { value: 0.0 },
+      uWallZ: { value: -1.8 },
     },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       varying vec3 vNormal;
       varying vec3 vViewDir;
+      varying vec3 vWorldPos;
       void main() {
         vUv = uv;
         vNormal = normalize(normalMatrix * normal);
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         vViewDir = normalize(-mv.xyz);
         gl_Position = projectionMatrix * mv;
@@ -233,15 +224,26 @@ function createLightShaft(lightPos, floorTarget) {
     fragmentShader: /* glsl */ `
       uniform vec3 uColor;
       uniform float uOpacity;
+      uniform float uFloorY;
+      uniform float uWallZ;
       varying vec2 vUv;
       varying vec3 vNormal;
       varying vec3 vViewDir;
+      varying vec3 vWorldPos;
       void main() {
         // brightest through the core of the cone, fading at grazing edges
         float core = pow(abs(dot(normalize(vNormal), normalize(vViewDir))), 1.8);
         // brightest near the light (uv.y = 1 at apex), fading to the floor
         float falloff = pow(vUv.y, 1.6);
-        gl_FragColor = vec4(uColor, core * falloff * uOpacity);
+        // dissolve before reaching the floor / back wall so the depth test
+        // never slices the cone into hard polygon edges
+        float floorFade = smoothstep(uFloorY + 0.03, uFloorY + 0.65, vWorldPos.y);
+        float wallFade = smoothstep(uWallZ + 0.05, uWallZ + 0.75, vWorldPos.z);
+        float a = core * falloff * floorFade * wallFade * uOpacity;
+        // dither the faint gradient so it doesn't band on 8-bit output
+        float n = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        a *= 0.88 + 0.24 * n;
+        gl_FragColor = vec4(uColor, a);
       }
     `,
   });

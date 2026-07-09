@@ -104,15 +104,18 @@ export function buildBookcase(p, material) {
     }
   }
 
-  // one combined collision box for the whole back (planks or flat)
-  if (p.back !== 'open') {
-    addCollider(Wi, innerH, fat, 0, cy, -D / 2 + tb + 0.001 - fat / 2); // front face stays put
-  }
-
   // shelves and dividers sit behind the face frame, in front of the back
   const backT = p.back === 'open' ? 0.002 : tb + 0.004;
   const shelfD = D - backT - 0.012;
   const shelfZ = -D / 2 + backT + shelfD / 2;
+
+  // back panel collision: a thick wall whose front face is flush with the
+  // interior back plane, so books thrown or dragged at the back stop dead
+  // instead of passing through. z of that front plane is exported as backZ.
+  const backZ = p.back === 'open' ? null : -D / 2 + backT;
+  if (backZ !== null) {
+    addCollider(Wi, innerH, fat, 0, cy, backZ - fat / 2); // front face at the interior back
+  }
 
   // ---- vertical dividers (separations) --------------------------------------
   const cols = p.separations + 1;
@@ -220,7 +223,7 @@ export function buildBookcase(p, material) {
   const cap = part(W + 2 * (bp + 0.012), 0.022, D + bp + 0.012, { r: 0.006 });
   cap.position.set(0, baseH - 0.011, (bp + 0.012) / 2);
 
-  return { group: g, colliders, compartments };
+  return { group: g, colliders, compartments, backZ };
 }
 
 export function disposeGroup(group) {

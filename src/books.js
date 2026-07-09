@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { applyWorldUVs } from './materials.js';
 
 export const BOOK_DEFAULTS = {
   enabled: true,
   palette: 'vintage',
+  darkness: 0.5,     // pulls cover tints toward deep, muted tones
   density: 0.78,     // how packed the shelves are
   lean: 0.22,        // chance of a leaning book
   stacks: 0.18,      // chance of a horizontal pile
@@ -14,6 +16,8 @@ export const BOOK_DEFAULTS = {
   grab: true,        // interaction mode: grab & throw
   throwPower: 1.3,
 };
+
+const LEATHER_SCALE = 0.45; // meters of leather per texture tile
 
 const MAX_BOOKS = 550;
 
@@ -51,31 +55,36 @@ function coloredBox(w, h, d, x, y, z, color) {
 
 // a book: two cover boards + spine (at +z) overhanging a cream pages block.
 // the pages are inset by an epsilon on every shared face so nothing is coplanar
-// with the covers or spine (coplanar faces z-fight).
-function makeBookGeometry(t, h, d, coverColor, pagesColor) {
+// with the covers or spine (coplanar faces z-fight). merged with two material
+// groups: [0] paper pages, [1] leather covers.
+function makeBookGeometry(t, h, d, coverColor, pagesColor, uvSeed) {
   const ct = Math.min(0.0045, t * 0.18); // cover board thickness
   const o = Math.min(0.004, h * 0.03);   // cover overhang past the pages
   const e = 0.0005;                      // anti-z-fight inset
-  return mergeGeometries([
-    coloredBox(t - 2 * ct - 2 * e, h - 2 * o, d - o - 2 * e, 0, 0, (o - e) / 2, pagesColor),
+  const pages = coloredBox(t - 2 * ct - 2 * e, h - 2 * o, d - o - 2 * e, 0, 0, (o - e) / 2, pagesColor);
+  const covers = mergeGeometries([
     coloredBox(ct, h, d, -(t - ct) / 2, 0, 0, coverColor),
     coloredBox(ct, h, d, (t - ct) / 2, 0, 0, coverColor),
     coloredBox(t - 2 * ct, h, ct, 0, 0, (d - ct) / 2, coverColor),
   ]);
+  const geo = mergeGeometries([pages, covers], true);
+  // world-scale leather grain, unique patch of hide per book
+  applyWorldUVs(geo, LEATHER_SCALE, false, uvSeed * 4, uvSeed * 2.7);
+  return geo;
 }
 
-export function createBooksSystem(scene, camera, setOrbitEnabled) {
+export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled) {
   const group = new THREE.Group();
   scene.add(group);
 
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: true, roughness: 0.72, metalness: 0, envMapIntensity: 0.6,
-  });
+  // material index 0 = pages, 1 = leather covers (matches geometry groups)
+  const materials = [bookMaterials.pages, bookMaterials.covers];
 
   let world = null;
   let jointBody = null;
   let books = []; // { mesh, body }
   let drag = null;
+  let backZ = null; // z of the back panel's front face; dragged books can't cross it
   let currentParams = { ...BOOK_DEFAULTS };
 
   const raycaster = new THREE.Raycaster();
@@ -101,15 +110,10 @@ export function createBooksSystem(scene, camera, setOrbitEnabled) {
     world.defaultContactMaterial.friction = 0.5;
     world.defaultContactMaterial.restitution = 0.05;
 
-    // studio floor
+    // studio floor (infinite plane; no back wall — books can sail off into the dark)
     const floor = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
     floor.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     world.addBody(floor);
-
-    // cyclorama back wall
-    const wall = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
-    wall.position.set(0, 0, -1.85);
-    world.addBody(wall);
 
     for (const c of colliders) {
       const body = new CANNON.Body({
@@ -134,10 +138,12 @@ export function createBooksSystem(scene, camera, setOrbitEnabled) {
     const palette = PALETTES[bp.palette] || PALETTES.vintage;
     const cover = new THREE.Color(palette[Math.floor(rnd() * palette.length)]);
     cover.offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.12, (rnd() - 0.5) * 0.1);
+    // the leather diffuse is whitish, so the vertex tint carries the darkness
+    cover.multiplyScalar(1 - 0.55 * bp.darkness);
     const pages = new THREE.Color('#f3ead6');
     pages.offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
 
-    const mesh = new THREE.Mesh(makeBookGeometry(t, h, d, cover, pages), material);
+    const mesh = new THREE.Mesh(makeBookGeometry(t, h, d, cover, pages, rnd()), materials);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.position.copy(position);
@@ -275,6 +281,7 @@ export function createBooksSystem(scene, camera, setOrbitEnabled) {
 
   function rebuild(built, bp) {
     currentParams = bp;
+    backZ = built.backZ ?? null;
     clear();
     setupWorld(built.colliders);
     if (!bp.enabled) return;
@@ -333,7 +340,9 @@ export function createBooksSystem(scene, camera, setOrbitEnabled) {
     ndcFromEvent(e);
     raycaster.setFromCamera(pointer, camera);
     const p = raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction, drag.distance);
-    jointBody.position.set(p.x, Math.max(p.y, 0.03), p.z);
+    // don't let a fast drag teleport the book behind the back panel
+    const pz = backZ !== null ? Math.max(p.z, backZ + 0.03) : p.z;
+    jointBody.position.set(p.x, Math.max(p.y, 0.03), pz);
   }
 
   // capture phase on window so a grab wins over OrbitControls' own pointerdown

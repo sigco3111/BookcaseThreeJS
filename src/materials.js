@@ -26,6 +26,39 @@ export function createWoodMaterial(renderer) {
   });
 }
 
+// book materials: whitish leather tinted per-book via vertex colors, plus plain paper
+export function createBookMaterials(renderer) {
+  const loader = new THREE.TextureLoader();
+  const aniso = renderer.capabilities.getMaxAnisotropy();
+
+  const setup = (tex, srgb = false) => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = aniso;
+    if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  };
+
+  const covers = new THREE.MeshStandardMaterial({
+    map: setup(loader.load('/Leather025_1K-JPG_Color.jpg'), true),
+    normalMap: setup(loader.load('/Leather025_1K-JPG_NormalGL.jpg')),
+    roughnessMap: setup(loader.load('/Leather025_1K-JPG_Roughness.jpg')),
+    normalScale: new THREE.Vector2(0.9, 0.9),
+    vertexColors: true,
+    roughness: 1.0,
+    metalness: 0,
+    envMapIntensity: 0.55,
+  });
+
+  const pages = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    roughness: 0.88,
+    metalness: 0,
+    envMapIntensity: 0.35,
+  });
+
+  return { covers, pages };
+}
+
 /**
  * Box-projects UVs in world-scale meters so wood grain density is identical on
  * every part no matter its dimensions. `rotate` swaps U/V so grain can run
