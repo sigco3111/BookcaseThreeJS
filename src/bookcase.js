@@ -41,6 +41,16 @@ export function buildBookcase(p, material) {
   const baseH = p.baseHeight;
   const edgeR = Math.min(0.0045, t / 3);
 
+  // physics collision boxes ({size, position}) and open compartments for books.
+  // thin boards get fattened collision boxes (cannon-es has no CCD, so fast books
+  // tunnel straight through anything thinner than one step of travel); the faces
+  // books actually rest against stay exactly on the visible surfaces.
+  const colliders = [];
+  const compartments = [];
+  const addCollider = (w, h, d, x, y, z) => colliders.push({ size: [w, h, d], position: [x, y, z] });
+  const fat = Math.max(0.08, p.thickness);
+  const xPad = (fat - p.thickness) / 2; // how far side/divider colliders intrude into compartments
+
   // every board: rounded box, world-scale grain, unique grain offset
   const part = (w, h, d, { rotate = false, r = edgeR } = {}) => {
     const radius = Math.min(r, Math.min(w, h, d) / 2.001);
@@ -63,11 +73,14 @@ export function buildBookcase(p, material) {
   for (const dir of [-1, 1]) {
     const side = part(t, carcassH, D, { rotate: true });
     side.position.set(dir * (W - t) / 2, cy, 0);
+    addCollider(fat, carcassH, D, dir * (W - t) / 2, cy, 0);
   }
   const topBoard = part(Wi, t, D);
   topBoard.position.set(0, carcassTop - t / 2, 0);
+  addCollider(Wi, fat, D, 0, carcassTop - t + fat / 2, 0); // bottom face stays put
   const bottomBoard = part(Wi, t, D);
   bottomBoard.position.set(0, carcassBottom + t / 2, 0);
+  addCollider(Wi, fat, D, 0, carcassBottom + t - fat / 2, 0); // top face stays put
 
   const innerH = carcassH - 2 * t;
 
@@ -91,6 +104,11 @@ export function buildBookcase(p, material) {
     }
   }
 
+  // one combined collision box for the whole back (planks or flat)
+  if (p.back !== 'open') {
+    addCollider(Wi, innerH, fat, 0, cy, -D / 2 + tb + 0.001 - fat / 2); // front face stays put
+  }
+
   // shelves and dividers sit behind the face frame, in front of the back
   const backT = p.back === 'open' ? 0.002 : tb + 0.004;
   const shelfD = D - backT - 0.012;
@@ -103,15 +121,29 @@ export function buildBookcase(p, material) {
     const x = -Wi / 2 + i * (colW + t) - t / 2;
     const divider = part(t, innerH, shelfD, { rotate: true });
     divider.position.set(x, cy, shelfZ);
+    addCollider(fat, innerH, shelfD, x, cy, shelfZ);
   }
 
   // ---- shelves ---------------------------------------------------------------
+  const shelfY = (s) => carcassBottom + t + (innerH * s) / (p.shelves + 1);
   for (let c = 0; c < cols; c++) {
     const cx = -Wi / 2 + c * (colW + t) + colW / 2;
     for (let s = 1; s <= p.shelves; s++) {
-      const y = carcassBottom + t + (innerH * s) / (p.shelves + 1);
       const shelf = part(Math.max(colW - 0.002, 0.02), t, shelfD);
-      shelf.position.set(cx, y, shelfZ);
+      shelf.position.set(cx, shelfY(s), shelfZ);
+      addCollider(colW, fat, shelfD, cx, shelfY(s) + t / 2 - fat / 2, shelfZ); // top face stays put
+    }
+    // record the open compartments of this column for book placement,
+    // inset so books never spawn inside the fattened colliders
+    for (let gap = 0; gap <= p.shelves; gap++) {
+      compartments.push({
+        x0: cx - colW / 2 + xPad,
+        x1: cx + colW / 2 - xPad,
+        y0: gap === 0 ? carcassBottom + t : shelfY(gap) + t / 2,
+        y1: gap === p.shelves ? carcassTop - t : shelfY(gap + 1) + t / 2 - fat,
+        z0: shelfZ - shelfD / 2,
+        z1: shelfZ + shelfD / 2,
+      });
     }
   }
 
@@ -124,19 +156,23 @@ export function buildBookcase(p, material) {
 
     const railTop = part(W, railTopH, fd);
     railTop.position.set(0, carcassTop - railTopH / 2, fz);
+    addCollider(W, railTopH, fd, 0, carcassTop - railTopH / 2, fz);
     const railBot = part(W, railBotH, fd);
     railBot.position.set(0, carcassBottom + railBotH / 2, fz);
+    addCollider(W, railBotH, fd, 0, carcassBottom + railBotH / 2, fz);
 
     const stileH = carcassH - railTopH - railBotH;
     const stileY = carcassBottom + railBotH + stileH / 2;
     for (const dir of [-1, 1]) {
       const stile = part(stileW, stileH, fd, { rotate: true });
       stile.position.set(dir * (W - stileW) / 2, stileY, fz);
+      addCollider(stileW, stileH, fd, dir * (W - stileW) / 2, stileY, fz);
     }
     for (let i = 1; i <= p.separations; i++) {
       const x = -Wi / 2 + i * (colW + t) - t / 2;
       const stile = part(midStileW, stileH, fd, { rotate: true });
       stile.position.set(x, stileY, fz);
+      addCollider(midStileW, stileH, fd, x, stileY, fz);
     }
   }
 
@@ -172,6 +208,7 @@ export function buildBookcase(p, material) {
     for (const L of layers) {
       const c = part(W + 2 * L.proud, L.h, D + L.proud, { r: 0.005 });
       c.position.set(0, L.y + L.h / 2, L.proud / 2);
+      addCollider(W + 2 * L.proud, L.h, D + L.proud, 0, L.y + L.h / 2, L.proud / 2);
     }
   }
 
@@ -179,10 +216,11 @@ export function buildBookcase(p, material) {
   const bp = 0.018;
   const plinth = part(W + 2 * bp, baseH, D + bp, { r: 0.004 });
   plinth.position.set(0, baseH / 2, bp / 2);
+  addCollider(W + 2 * bp, baseH, D + bp, 0, baseH / 2, bp / 2);
   const cap = part(W + 2 * (bp + 0.012), 0.022, D + bp + 0.012, { r: 0.006 });
   cap.position.set(0, baseH - 0.011, (bp + 0.012) / 2);
 
-  return g;
+  return { group: g, colliders, compartments };
 }
 
 export function disposeGroup(group) {

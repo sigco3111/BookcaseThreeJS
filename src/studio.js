@@ -68,11 +68,11 @@ export function createStudio(scene, renderer, target) {
   key.penumbra = 0.65;
   key.decay = 1.6;
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(4096, 4096);
   key.shadow.camera.near = 0.5;
   key.shadow.camera.far = 16;
-  key.shadow.bias = -0.0002;
-  key.shadow.normalBias = 0.02;
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.035;
   key.shadow.radius = 4;
   key.target.position.set(0, 1.0, 0.1);
   scene.add(key, key.target);

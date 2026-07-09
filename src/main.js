@@ -9,6 +9,7 @@ import GUI from 'lil-gui';
 import { createWoodMaterial } from './materials.js';
 import { buildBookcase, disposeGroup, DEFAULT_PARAMS } from './bookcase.js';
 import { createStudio, createContactShadow, MOODS } from './studio.js';
+import { createBooksSystem, BOOK_DEFAULTS } from './books.js';
 
 // ---- renderer ---------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -62,16 +63,25 @@ const studio = createStudio(scene, renderer, target);
 const contactShadow = createContactShadow();
 scene.add(contactShadow);
 
+const bookParams = { ...BOOK_DEFAULTS };
+const booksSys = createBooksSystem(scene, camera, (on) => { controls.enabled = on; });
+
 let bookcase = null;
+let built = null;
 function rebuild() {
   if (bookcase) {
     disposeGroup(bookcase);
     scene.remove(bookcase);
   }
-  bookcase = buildBookcase(params, wood);
+  built = buildBookcase(params, wood);
+  bookcase = built.group;
   scene.add(bookcase);
+  booksSys.rebuild(built, bookParams);
   contactShadow.scale.set(params.width * 1.6, params.depth * 2.8, 1);
   controls.target.set(0, params.height * 0.48, 0);
+}
+function rebuildBooks() {
+  if (built) booksSys.rebuild(built, bookParams);
 }
 rebuild();
 
@@ -230,6 +240,27 @@ const fLayout = gui.addFolder('Layout');
 fLayout.add(params, 'shelves', 0, 8, 1).onChange(rebuild);
 fLayout.add(params, 'separations', 0, 4, 1).onChange(rebuild);
 
+const fBooks = gui.addFolder('Books');
+fBooks.add(bookParams, 'enabled').name('📚 books').onChange(rebuildBooks);
+fBooks.add(bookParams, 'palette', ['vintage', 'jewel', 'pastel', 'academic', 'neon']).onChange(rebuildBooks);
+fBooks.add(bookParams, 'density', 0.1, 1, 0.01).onChange(rebuildBooks);
+fBooks.add(bookParams, 'lean', 0, 0.6, 0.01).name('leaning books').onChange(rebuildBooks);
+fBooks.add(bookParams, 'stacks', 0, 0.6, 0.01).name('flat stacks').onChange(rebuildBooks);
+fBooks.add(bookParams, 'messiness', 0, 1, 0.01).onChange(rebuildBooks);
+fBooks.add(bookParams, 'scale', 0.7, 1.4, 0.01).name('book size').onChange(rebuildBooks);
+fBooks.add(bookParams, 'seed', 0, 9999, 1).onChange(rebuildBooks);
+fBooks.add({
+  reseed: () => {
+    bookParams.seed = Math.floor(Math.random() * 10000);
+    gui.controllersRecursive().forEach((c) => c.updateDisplay());
+    rebuildBooks();
+  },
+}, 'reseed').name('🎲 new seed');
+fBooks.add(bookParams, 'grab').name('✋ grab & throw');
+fBooks.add(bookParams, 'throwPower', 0.5, 3, 0.05).name('throw power');
+fBooks.add({ quake: () => booksSys.bookquake() }, 'quake').name('💥 bookquake');
+fBooks.add({ reset: rebuildBooks }, 'reset').name('↩ reset books');
+
 const fCon = gui.addFolder('Construction');
 fCon.add(params, 'thickness', 0.018, 0.045, 0.001).name('board thickness').onChange(rebuild);
 fCon.add(params, 'baseHeight', 0.06, 0.22, 0.005).name('plinth height').onChange(rebuild);
@@ -295,6 +326,8 @@ function randomize() {
   params.faceFrame = Math.random() > 0.25;
   params.sidePanels = Math.random() > 0.3;
   params.back = ['planks', 'planks', 'flat', 'open'][Math.floor(Math.random() * 4)];
+  bookParams.seed = Math.floor(Math.random() * 10000);
+  bookParams.palette = ['vintage', 'jewel', 'pastel', 'academic', 'neon'][Math.floor(Math.random() * 5)];
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   rebuild();
 }
@@ -310,8 +343,11 @@ window.addEventListener('resize', () => {
   composer.setSize(window.innerWidth, window.innerHeight);
 });
 
+let lastTime = 0;
 renderer.setAnimationLoop((time) => {
   const t = time / 1000;
+  const dt = Math.min((time - lastTime) / 1000, 0.05);
+  lastTime = time;
 
   if (shotTween) {
     const k = easeInOut(Math.min(1, (performance.now() - shotTween.t0) / shotTween.dur));
@@ -331,6 +367,7 @@ renderer.setAnimationLoop((time) => {
   controls.update();
 
   studio.update(t);
+  booksSys.update(dt);
   gradePass.uniforms.uTime.value = t;
   composer.render();
 });
