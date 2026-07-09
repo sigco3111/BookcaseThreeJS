@@ -422,9 +422,10 @@ fBooks.close();
 
 const fDust = gui.addFolder('Dust');
 const dustChanged = () => dustFX.refresh();
+fDust.add(dustParams, 'enabled').name('🌫 dust').onChange(dustChanged);
 fDust.add(dustParams, 'surface', 0, 1, 0.01).name('settled dust').onChange(dustChanged);
 fDust.add(dustParams, 'patchiness', 0, 1, 0.01).onChange(dustChanged);
-fDust.add(dustParams, 'scale', 0.5, 8, 0.05).name('patch size').onChange(dustChanged);
+fDust.add(dustParams, 'scale', 0.5, 20, 0.05).name('patch size').onChange(dustChanged);
 fDust.add(dustParams, 'topBias', 0.5, 6, 0.05).name('top-surface bias').onChange(dustChanged);
 fDust.addColor(dustParams, 'color').name('dust color').onChange(dustChanged);
 fDust.add(studioParams, 'dust', 0, 1, 0.01).name('ambient motes').onChange((v) => {

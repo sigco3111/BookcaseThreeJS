@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 
 export const DUST_DEFAULTS = {
+  enabled: false,    // master switch: surface overlay + impact puffs together
   // settled surface dust (shader layer on wood + leather + paper)
   surface: 0.35,     // overall coverage
   patchiness: 0.65,  // noise contrast: 0 = even film, 1 = blotchy neglect
-  scale: 2.2,        // noise feature size
+  scale: 7.0,        // noise feature size
   topBias: 2.0,      // how strictly dust favours upward-facing surfaces
   color: '#b9ac93',  // dry dusty beige
   // impact puffs (physics-triggered particles)
@@ -48,7 +49,7 @@ function makePuffTexture() {
 export function createDustSystem(scene, renderer, dustParams) {
   // uniforms shared by every dusted material (wood, leather covers, pages)
   const surfaceUniforms = {
-    uDustAmount: { value: dustParams.surface },
+    uDustAmount: { value: dustParams.enabled ? dustParams.surface : 0 },
     uDustPatchiness: { value: dustParams.patchiness },
     uDustScale: { value: dustParams.scale },
     uDustBias: { value: dustParams.topBias },
@@ -162,7 +163,7 @@ export function createDustSystem(scene, renderer, dustParams) {
 
   // a puff at a collision point: dust kicks outward and slightly up
   function impact(point, energy) {
-    if (!dustParams.puffs || impactsThisFrame >= MAX_IMPACTS_PER_FRAME) return;
+    if (!dustParams.enabled || !dustParams.puffs || impactsThisFrame >= MAX_IMPACTS_PER_FRAME) return;
     impactsThisFrame++;
     const e = Math.min(energy, 6);
     const count = Math.min(26, Math.round((3 + e * 3.2) * dustParams.puffDensity));
@@ -185,7 +186,7 @@ export function createDustSystem(scene, renderer, dustParams) {
 
   // a large area burst (bookquake / test button)
   function burst(center, radius, count) {
-    if (!dustParams.puffs) return;
+    if (!dustParams.enabled || !dustParams.puffs) return;
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * radius;
@@ -215,7 +216,7 @@ export function createDustSystem(scene, renderer, dustParams) {
 
   // GUI hooks: live-update uniforms from dustParams
   function refresh() {
-    surfaceUniforms.uDustAmount.value = dustParams.surface;
+    surfaceUniforms.uDustAmount.value = dustParams.enabled ? dustParams.surface : 0;
     surfaceUniforms.uDustPatchiness.value = dustParams.patchiness;
     surfaceUniforms.uDustScale.value = dustParams.scale;
     surfaceUniforms.uDustBias.value = dustParams.topBias;

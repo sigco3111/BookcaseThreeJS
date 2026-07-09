@@ -98,7 +98,8 @@ float dustHash(vec2 p) {
 float dustNoise(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
+  // quintic interpolation: cubic shows blocky cell edges at high scales
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
   return mix(
     mix(dustHash(i), dustHash(i + vec2(1.0, 0.0)), u.x),
     mix(dustHash(i + vec2(0.0, 1.0)), dustHash(i + vec2(1.0, 1.0)), u.x), u.y);
@@ -107,7 +108,11 @@ float dustNoise(vec2 p) {
 {
   float dUp = pow(clamp(vDustNormal.y, 0.0, 1.0), uDustBias);
   vec2 dP = (vDustWorldPos.xz + vec2(vDustWorldPos.y * 0.61, vDustWorldPos.y * 0.27)) * uDustScale;
-  float dN = 0.65 * dustNoise(dP) + 0.35 * dustNoise(dP * 3.1);
+  // octaves sampled on rotated grids so the noise lattice never lines up
+  // and reads organic instead of blocky at high scales
+  vec2 dP2 = mat2(0.80, -0.60, 0.60, 0.80) * dP * 2.6;
+  vec2 dP3 = mat2(0.55, 0.835, -0.835, 0.55) * dP * 6.3;
+  float dN = 0.55 * dustNoise(dP) + 0.30 * dustNoise(dP2) + 0.15 * dustNoise(dP3);
   float dCover = dUp * mix(1.0, smoothstep(0.25, 0.85, dN), uDustPatchiness);
   float dust = uDustAmount * dCover + uDustAmount * 0.12 * dN * (1.0 - dUp);
   dust = clamp(dust, 0.0, 1.0);
