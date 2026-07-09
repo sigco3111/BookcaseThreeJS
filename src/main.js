@@ -29,7 +29,7 @@ scene.background = new THREE.Color(0x131417);
 scene.fog = new THREE.FogExp2(0x131417, 0.055);
 
 const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 60);
-camera.position.set(2.9, 1.7, 4.1);
+camera.position.set(3.7, 2.1, 5.3);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -42,7 +42,7 @@ controls.maxPolarAngle = Math.PI / 2 + 0.04;
 const params = { ...DEFAULT_PARAMS };
 const style = { tint: '#ffffff', roughness: 1.0 };
 const studioParams = {
-  mood: 'noir',
+  mood: 'moonlight',
   keyLight: 95,
   fillLight: 0.6,
   rimLight: 14,
@@ -67,7 +67,7 @@ const fxParams = {
   temperature: 0.0,
   vignette: 0.55,
   grain: 0.03,
-  letterbox: 0.0,
+  letterbox: 0.1,
 };
 const cameraParams = { fov: 30, turntable: false, speed: 1.2 };
 
@@ -325,7 +325,6 @@ function randomize() {
   params.sidePanels = Math.random() > 0.3;
   params.back = ['planks', 'planks', 'flat', 'open'][Math.floor(Math.random() * 4)];
   bookParams.seed = Math.floor(Math.random() * 10000);
-  bookParams.palette = ['vintage', 'jewel', 'pastel', 'academic', 'neon'][Math.floor(Math.random() * 5)];
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   rebuild();
 }
@@ -357,7 +356,24 @@ fCase.close();
 
 const fBooks = gui.addFolder('Books');
 fBooks.add(bookParams, 'enabled').name('📚 books').onChange(rebuildBooks);
-fBooks.add(bookParams, 'palette', ['vintage', 'jewel', 'pastel', 'academic', 'neon']).onChange(rebuildBooks);
+const fRamp = fBooks.addFolder('color ramp');
+Object.keys(bookParams.ramp).forEach((k, i) => {
+  fRamp.addColor(bookParams.ramp, k).name(`stop ${i + 1}`).onChange(rebuildBooks);
+});
+function randomizeBookColors() {
+  const c = new THREE.Color();
+  Object.keys(bookParams.ramp).forEach((k) => {
+    const h = Math.random();
+    const s = 0.35 + Math.random() * 0.3;  // muted, never neon
+    const l = 0.28 + Math.random() * 0.24; // deep-ish, tasteful
+    c.setHSL(h, s, l, THREE.SRGBColorSpace);
+    bookParams.ramp[k] = '#' + c.getHexString(THREE.SRGBColorSpace);
+  });
+  gui.controllersRecursive().forEach((ctrl) => ctrl.updateDisplay());
+  rebuildBooks();
+}
+fRamp.add({ randomizeBookColors }, 'randomizeBookColors').name('🎲 randomize colors');
+fRamp.close();
 fBooks.add(bookParams, 'darkness', 0, 1, 0.01).onChange(rebuildBooks);
 fBooks.add(bookParams, 'density', 0.1, 1, 0.01).onChange(rebuildBooks);
 fBooks.add(bookParams, 'lean', 0, 0.6, 0.01).name('leaning books').onChange(rebuildBooks);

@@ -5,7 +5,10 @@ import { applyWorldUVs } from './materials.js';
 
 export const BOOK_DEFAULTS = {
   enabled: true,
-  palette: 'vintage',
+  // cover colors are sampled straight off this editable ramp (no tinting)
+  ramp: {
+    s1: '#6e3b2e', s2: '#8a6d3b', s3: '#31435e', s4: '#4f6350', s5: '#5c4a3d',
+  },
   darkness: 0.5,     // pulls cover tints toward deep, muted tones
   density: 0.78,     // how packed the shelves are
   lean: 0.22,        // chance of a leaning book
@@ -21,13 +24,16 @@ const LEATHER_SCALE = 0.45; // meters of leather per texture tile
 
 const MAX_BOOKS = 550;
 
-const PALETTES = {
-  vintage:  ['#7a3b2e', '#4f6350', '#31435e', '#8a6d3b', '#5c4a3d', '#a34a38', '#3d4a54', '#c2a25c', '#6e3f4b', '#e8dcc0'],
-  jewel:    ['#0f6a4f', '#1e3f8f', '#6b1f3c', '#5b2a86', '#0e6f74', '#b08d2f', '#8f2d2d', '#254d32'],
-  pastel:   ['#e8b4bc', '#a8c8b8', '#b4c9e8', '#cbb8e0', '#e6d3a8', '#f0e2d0', '#9fb8ad', '#d9a79c'],
-  academic: ['#3a2c22', '#59331d', '#6e1f1f', '#243325', '#1c2430', '#4a3b28', '#2b2b2b', '#7c5c38'],
-  neon:     ['#ff2d78', '#00c2c7', '#a6e22e', '#ff8c1a', '#8f4bff', '#ffd21f', '#12d17c', '#ff5533'],
-};
+// sample a color along the ramp: u in [0,1] walks across the stops, lerping
+// between neighbours — books get the ramp's colors directly, untinted
+function sampleRamp(stops, u) {
+  const n = stops.length;
+  if (n === 0) return new THREE.Color('#888888');
+  if (n === 1) return new THREE.Color(stops[0]);
+  const x = THREE.MathUtils.clamp(u, 0, 1) * (n - 1);
+  const i = Math.min(Math.floor(x), n - 2);
+  return new THREE.Color(stops[i]).lerp(new THREE.Color(stops[i + 1]), x - i);
+}
 
 function mulberry32(a) {
   return function () {
@@ -135,9 +141,8 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled)
   // ---- book spawning ------------------------------------------------------------
 
   function spawnBook(t, h, d, position, quaternion, rnd, bp) {
-    const palette = PALETTES[bp.palette] || PALETTES.vintage;
-    const cover = new THREE.Color(palette[Math.floor(rnd() * palette.length)]);
-    cover.offsetHSL((rnd() - 0.5) * 0.04, (rnd() - 0.5) * 0.12, (rnd() - 0.5) * 0.1);
+    // pick a color from the ramp (untinted); darkness still applies globally
+    const cover = sampleRamp(Object.values(bp.ramp), rnd());
     // the leather diffuse is whitish, so the vertex tint carries the darkness
     cover.multiplyScalar(1 - 0.55 * bp.darkness);
     const pages = new THREE.Color('#f3ead6');
