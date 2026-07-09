@@ -79,7 +79,7 @@ function makeBookGeometry(t, h, d, coverColor, pagesColor, uvSeed) {
   return geo;
 }
 
-export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled) {
+export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled, onImpact) {
   const group = new THREE.Group();
   scene.add(group);
 
@@ -168,7 +168,25 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled)
     world.addBody(body);
     body.sleep(); // stay perfectly still until something disturbs it
 
-    books.push({ mesh, body });
+    const rec = { mesh, body, lastPuff: 0 };
+
+    // hard landings kick up a puff of dust at the contact point
+    if (onImpact) {
+      body.addEventListener('collide', (e) => {
+        const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
+        const tNow = performance.now();
+        if (v < 1.15 || tNow - rec.lastPuff < 160) return;
+        rec.lastPuff = tNow;
+        const own = e.contact.bi === body;
+        const src = own ? e.contact.bi : e.contact.bj;
+        const r = own ? e.contact.ri : e.contact.rj;
+        onImpact(new THREE.Vector3(
+          src.position.x + r.x, src.position.y + r.y, src.position.z + r.z
+        ), v);
+      });
+    }
+
+    books.push(rec);
   }
 
   function bookDims(rnd, bp, compH, compD) {
@@ -358,6 +376,7 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled)
   // ---- extras ----------------------------------------------------------------------
 
   function bookquake() {
+    let puffed = 0;
     for (const b of books) {
       b.body.wakeUp();
       b.body.velocity.set(
@@ -370,6 +389,13 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled)
         (Math.random() - 0.5) * 8,
         (Math.random() - 0.5) * 8
       );
+      // dust erupts off the shelves as the books blast out
+      if (onImpact && puffed < 60 && Math.random() < 0.5) {
+        puffed++;
+        onImpact(new THREE.Vector3(
+          b.body.position.x, b.body.position.y, b.body.position.z
+        ), 2 + Math.random() * 2.5);
+      }
     }
   }
 

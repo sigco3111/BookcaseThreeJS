@@ -60,6 +60,65 @@ export function createBookMaterials(renderer) {
 }
 
 /**
+ * Injects a procedural settled-dust layer into a MeshStandardMaterial:
+ * dust accumulates on upward-facing surfaces (with a faint grime film on
+ * verticals), broken up by world-space value noise for patchiness. Blends
+ * the albedo toward the dust color and lifts roughness where dust sits.
+ * All dusted materials share the same uniform objects so one GUI change
+ * updates wood, leather, and paper together — live, no rebuild.
+ */
+export function addDustLayer(material, uniforms, cacheKey) {
+  material.customProgramCacheKey = () => `dusted-${cacheKey}`;
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    if (prev) prev(shader, renderer);
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vDustWorldPos;
+varying vec3 vDustNormal;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  vDustWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+  vDustNormal = normalize(mat3(modelMatrix) * objectNormal);`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vDustWorldPos;
+varying vec3 vDustNormal;
+uniform float uDustAmount;
+uniform float uDustPatchiness;
+uniform float uDustScale;
+uniform float uDustBias;
+uniform vec3 uDustColor;
+// sine-free hash (stable on ANGLE/D3D)
+float dustHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float dustNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(dustHash(i), dustHash(i + vec2(1.0, 0.0)), u.x),
+    mix(dustHash(i + vec2(0.0, 1.0)), dustHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+{
+  float dUp = pow(clamp(vDustNormal.y, 0.0, 1.0), uDustBias);
+  vec2 dP = (vDustWorldPos.xz + vec2(vDustWorldPos.y * 0.61, vDustWorldPos.y * 0.27)) * uDustScale;
+  float dN = 0.65 * dustNoise(dP) + 0.35 * dustNoise(dP * 3.1);
+  float dCover = dUp * mix(1.0, smoothstep(0.25, 0.85, dN), uDustPatchiness);
+  float dust = uDustAmount * dCover + uDustAmount * 0.12 * dN * (1.0 - dUp);
+  dust = clamp(dust, 0.0, 1.0);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uDustColor, dust);
+  roughnessFactor = mix(roughnessFactor, 1.0, dust * 0.9);
+}`);
+  };
+  material.needsUpdate = true;
+}
+
+/**
  * Box-projects UVs in world-scale meters so wood grain density is identical on
  * every part no matter its dimensions. `rotate` swaps U/V so grain can run
  * along the length of vertical members. `ou`/`ov` offset the projection so no

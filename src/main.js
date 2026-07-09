@@ -8,10 +8,11 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import GUI from 'lil-gui';
-import { createWoodMaterial, createBookMaterials } from './materials.js';
+import { createWoodMaterial, createBookMaterials, addDustLayer } from './materials.js';
 import { buildBookcase, disposeGroup, DEFAULT_PARAMS } from './bookcase.js';
 import { createStudio, createContactShadow, MOODS } from './studio.js';
 import { createBooksSystem, BOOK_DEFAULTS } from './books.js';
+import { createDustSystem, DUST_DEFAULTS } from './dust.js';
 
 // ---- renderer ---------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -80,9 +81,19 @@ const studio = createStudio(scene, renderer, target);
 const contactShadow = createContactShadow();
 scene.add(contactShadow);
 
+const dustParams = { ...DUST_DEFAULTS };
+const dustFX = createDustSystem(scene, renderer, dustParams);
+addDustLayer(wood, dustFX.surfaceUniforms, 'wood');
+
 const bookParams = { ...BOOK_DEFAULTS };
 const bookMats = createBookMaterials(renderer);
-const booksSys = createBooksSystem(scene, camera, bookMats, (on) => { controls.enabled = on; });
+addDustLayer(bookMats.covers, dustFX.surfaceUniforms, 'covers');
+addDustLayer(bookMats.pages, dustFX.surfaceUniforms, 'pages');
+const booksSys = createBooksSystem(
+  scene, camera, bookMats,
+  (on) => { controls.enabled = on; },
+  (point, energy) => dustFX.impact(point, energy)
+);
 
 let bookcase = null;
 let built = null;
@@ -395,9 +406,44 @@ function randomizeBooks() {
 fBooks.add({ randomizeBooks }, 'randomizeBooks').name('🎲 randomize books');
 fBooks.add(bookParams, 'grab').name('✋ grab & throw');
 fBooks.add(bookParams, 'throwPower', 0.5, 3, 0.05).name('throw power');
-fBooks.add({ quake: () => booksSys.bookquake() }, 'quake').name('💥 bookquake');
+fBooks.add({
+  quake: () => {
+    booksSys.bookquake();
+    // the whole library erupts — so does the dust that was sitting on it
+    dustFX.burst(
+      new THREE.Vector3(0, params.height * 0.55, 0.15),
+      Math.max(params.width * 0.6, 0.6),
+      180
+    );
+  },
+}, 'quake').name('💥 bookquake');
 fBooks.add({ reset: rebuildBooks }, 'reset').name('↩ reset books');
 fBooks.close();
+
+const fDust = gui.addFolder('Dust');
+const dustChanged = () => dustFX.refresh();
+fDust.add(dustParams, 'surface', 0, 1, 0.01).name('settled dust').onChange(dustChanged);
+fDust.add(dustParams, 'patchiness', 0, 1, 0.01).onChange(dustChanged);
+fDust.add(dustParams, 'scale', 0.5, 8, 0.05).name('patch size').onChange(dustChanged);
+fDust.add(dustParams, 'topBias', 0.5, 6, 0.05).name('top-surface bias').onChange(dustChanged);
+fDust.addColor(dustParams, 'color').name('dust color').onChange(dustChanged);
+fDust.add(studioParams, 'dust', 0, 1, 0.01).name('ambient motes').onChange((v) => {
+  studio.dust.material.opacity = v;
+  studio.dust.points.visible = v > 0.001;
+});
+fDust.add(dustParams, 'puffs').name('💨 impact puffs');
+fDust.add(dustParams, 'puffDensity', 0.2, 3, 0.05).name('puff density');
+fDust.add(dustParams, 'puffSize', 0.5, 3, 0.05).name('puff size').onChange(dustChanged);
+fDust.add(dustParams, 'puffOpacity', 0.05, 0.6, 0.01).name('puff opacity').onChange(dustChanged);
+fDust.add(dustParams, 'puffLife', 0.5, 4, 0.05).name('puff lifetime');
+fDust.add({
+  burst: () => dustFX.burst(
+    new THREE.Vector3(0, params.height * 0.55, 0.15),
+    Math.max(params.width * 0.6, 0.6),
+    160
+  ),
+}, 'burst').name('💨 dust burst');
+fDust.close();
 
 const fCam = gui.addFolder('Camera');
 fCam.add({ hero: () => flyTo('hero') }, 'hero').name('🎬 hero shot');
@@ -420,10 +466,6 @@ fStudio.add(studioParams, 'rimLight', 0, 40, 0.1).onChange((v) => { studio.rim.i
 fStudio.add(studioParams, 'haze', 0, 0.5, 0.005).onChange((v) => {
   studio.shaft.material.uniforms.uOpacity.value = v;
   studio.shaft.mesh.visible = v > 0.001;
-});
-fStudio.add(studioParams, 'dust', 0, 1, 0.01).onChange((v) => {
-  studio.dust.material.opacity = v;
-  studio.dust.points.visible = v > 0.001;
 });
 fStudio.add(studioParams, 'exposure', 0.3, 2, 0.01).onChange((v) => { renderer.toneMappingExposure = v; });
 fStudio.addColor(studioParams, 'backdrop').onChange((v) => {
@@ -490,6 +532,7 @@ renderer.setAnimationLoop((time) => {
 
   studio.update(t);
   booksSys.update(dt);
+  dustFX.update(t, camera);
   gradePass.uniforms.uTime.value = t;
   if (fxParams.dof) {
     bokehPass.uniforms.focus.value = camera.position.distanceTo(controls.target);
