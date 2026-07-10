@@ -10,6 +10,7 @@ export const BOOK_DEFAULTS = {
     s1: '#6e3b2e', s2: '#8a6d3b', s3: '#31435e', s4: '#4f6350', s5: '#5c4a3d',
   },
   darkness: 0.5,     // pulls cover tints toward deep, muted tones
+  openChance: 0.3,   // fraction of books that fly open when knocked loose
   density: 0.78,     // how packed the shelves are
   lean: 0.22,        // chance of a leaning book
   stacks: 0.18,      // chance of a horizontal pile
@@ -79,6 +80,64 @@ function makeBookGeometry(t, h, d, coverColor, pagesColor, uvSeed) {
   return geo;
 }
 
+// an articulated book that opens at the front cover only: the back cover,
+// spine, and page block stay rigid; the front cover hinges at its joint with
+// the spine, and a single thin first page trails it. same closed silhouette
+// as the merged version, and no way to splay into a starburst.
+function makeOpenableBook(t, h, d, coverColor, pagesColor, uvSeed, coverMat, pagesMat) {
+  const ct = Math.min(0.0045, t * 0.18);
+  const o = Math.min(0.004, h * 0.03);
+  const e = 0.0005;
+  const root = new THREE.Group();
+
+  const partMesh = (geometry, mat) => {
+    applyWorldUVs(geometry, LEATHER_SCALE, false, uvSeed * 4, uvSeed * 2.7);
+    const m = new THREE.Mesh(geometry, mat);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    return m;
+  };
+
+  // rigid body of the book: pages + back cover + spine (grouped materials)
+  const pagesGeo = coloredBox(t - 2 * ct - 2 * e, h - 2 * o, d - o - 2 * e, 0, 0, (o - e) / 2, pagesColor);
+  const shellGeo = mergeGeometries([
+    coloredBox(ct, h, d, -(t - ct) / 2, 0, 0, coverColor),
+    coloredBox(t - 2 * ct, h, ct, 0, 0, (d - ct) / 2, coverColor),
+  ]);
+  const rigid = mergeGeometries([pagesGeo, shellGeo], true);
+  applyWorldUVs(rigid, LEATHER_SCALE, false, uvSeed * 4, uvSeed * 2.7);
+  const rigidMesh = new THREE.Mesh(rigid, [pagesMat, coverMat]);
+  rigidMesh.castShadow = true;
+  rigidMesh.receiveShadow = true;
+  root.add(rigidMesh);
+
+  // front cover hinges at its inner corner where it meets the spine
+  const hingeZ = d / 2 - ct;
+  const coverPivot = new THREE.Group();
+  coverPivot.position.set((t - ct) / 2, 0, hingeZ);
+  coverPivot.add(partMesh(coloredBox(ct, h, d, 0, 0, -hingeZ, coverColor), coverMat));
+  root.add(coverPivot);
+
+  // one thin first page that trails the cover as it opens
+  const pagePivot = new THREE.Group();
+  pagePivot.position.set((t - ct) / 2 - ct / 2 - 0.0008, 0, hingeZ);
+  const pageD = d - o - ct;
+  pagePivot.add(partMesh(coloredBox(0.0008, h - 2 * o, pageD, 0, 0, -pageD / 2, pagesColor), pagesMat));
+  root.add(pagePivot);
+
+  return {
+    root,
+    ctl: {
+      cover: coverPivot,
+      page: pagePivot,
+      t: 0,
+      opening: false,
+      angle: 1.1 + Math.random() * 0.4, // 63..86 degrees when fully open
+      phase: Math.random() * Math.PI * 2,
+    },
+  };
+}
+
 export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled, onImpact) {
   const group = new THREE.Group();
   scene.add(group);
@@ -102,7 +161,7 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
     endDrag();
     for (const b of books) {
       group.remove(b.mesh);
-      b.mesh.geometry.dispose();
+      b.mesh.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
     }
     books = [];
     world = null;
@@ -115,6 +174,13 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
     world.allowSleep = true;
     world.defaultContactMaterial.friction = 0.5;
     world.defaultContactMaterial.restitution = 0.05;
+    // softer, more damped contacts + more solver iterations: stiff defaults
+    // overcorrect penetrations in piles of light boxes, which makes stacked
+    // books buzz indefinitely instead of settling
+    world.defaultContactMaterial.contactEquationStiffness = 1e6;
+    world.defaultContactMaterial.contactEquationRelaxation = 4;
+    world.defaultContactMaterial.frictionEquationStiffness = 1e6;
+    world.solver.iterations = 15;
 
     // studio floor (infinite plane; no back wall — books can sail off into the dark)
     const floor = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
@@ -148,9 +214,18 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
     const pages = new THREE.Color('#f3ead6');
     pages.offsetHSL(0, 0, (rnd() - 0.5) * 0.06);
 
-    const mesh = new THREE.Mesh(makeBookGeometry(t, h, d, cover, pages, rnd()), materials);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    // some books are articulated so they can fly open when knocked loose
+    let mesh;
+    let openCtl = null;
+    if (rnd() < bp.openChance) {
+      const openable = makeOpenableBook(t, h, d, cover, pages, rnd(), bookMaterials.covers, bookMaterials.pages);
+      mesh = openable.root;
+      openCtl = openable.ctl;
+    } else {
+      mesh = new THREE.Mesh(makeBookGeometry(t, h, d, cover, pages, rnd()), materials);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
     mesh.position.copy(position);
     mesh.quaternion.copy(quaternion);
     group.add(mesh);
@@ -158,17 +233,21 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
     const body = new CANNON.Body({
       mass: 800 * t * h * d, // ~paper density
       shape: new CANNON.Box(new CANNON.Vec3(t / 2, h / 2, d / 2)),
-      angularDamping: 0.12,
-      linearDamping: 0.01,
+      angularDamping: 0.25,
+      linearDamping: 0.08,
     });
     body.position.set(position.x, position.y, position.z);
     body.quaternion.set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-    body.sleepSpeedLimit = 0.5;
-    body.sleepTimeLimit = 0.4;
+    body.sleepSpeedLimit = 0.6;
+    body.sleepTimeLimit = 0.25;
     world.addBody(body);
     body.sleep(); // stay perfectly still until something disturbs it
 
-    const rec = { mesh, body, lastPuff: 0 };
+    const rec = {
+      mesh, body, lastPuff: 0,
+      open: openCtl,
+      home: { x: position.x, y: position.y, z: position.z },
+    };
 
     // hard landings kick up a puff of dust at the contact point
     if (onImpact) {
@@ -337,9 +416,12 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
     if (!currentParams.grab || !currentParams.enabled || e.button !== 0 || !world) return;
     ndcFromEvent(e);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(group.children, false)[0];
+    const hit = raycaster.intersectObjects(group.children, true)[0];
     if (!hit) return;
-    const rec = books.find((b) => b.mesh === hit.object);
+    // articulated books are groups: walk up to the book's root object
+    let obj = hit.object;
+    while (obj.parent && obj.parent !== group) obj = obj.parent;
+    const rec = books.find((b) => b.mesh === obj);
     if (!rec) return;
 
     e.stopPropagation(); // keep OrbitControls from starting a rotate
@@ -402,17 +484,50 @@ export function createBooksSystem(scene, camera, bookMaterials, setOrbitEnabled,
   // fastest allowed book: must cross less than one collider thickness (8cm)
   // per 1/120s substep, or it would tunnel through the boards
   const MAX_SPEED = 8;
+  let simTime = 0;
 
   function update(dt) {
     if (!world) return;
+    simTime += dt;
     world.step(1 / 120, Math.min(dt, 0.05), 8);
     for (const b of books) {
       if (b.body.sleepState !== CANNON.Body.SLEEPING) {
         const v = b.body.velocity;
         const speed = v.length();
         if (speed > MAX_SPEED) v.scale(MAX_SPEED / speed, v);
+        // settle assist: once a book is nearly still, bleed the residual
+        // solver jitter so piles stop buzzing and actually fall asleep
+        const isDragged = drag && drag.body === b.body;
+        if (!isDragged && speed < 0.18 && b.body.angularVelocity.length() < 0.6) {
+          v.scale(0.86, v);
+          b.body.angularVelocity.scale(0.8, b.body.angularVelocity);
+        }
         b.mesh.position.copy(b.body.position);
         b.mesh.quaternion.copy(b.body.quaternion);
+
+        // articulated books spring open once they're properly knocked loose,
+        // pages fluttering with speed, and stay open however they land
+        if (b.open) {
+          const o = b.open;
+          if (!o.opening) {
+            const dx = b.body.position.x - b.home.x;
+            const dy = b.body.position.y - b.home.y;
+            const dz = b.body.position.z - b.home.z;
+            if (v.lengthSquared() > 2.2 || dx * dx + dy * dy + dz * dz > 0.02) {
+              o.opening = true;
+            }
+          }
+          if (o.opening) {
+            o.t = Math.min(1, o.t + dt * 3.2);
+            const ease = o.t * o.t * (3 - 2 * o.t);
+            const A = o.angle * ease;
+            const flutter = Math.min(1, v.lengthSquared() / 6) * ease;
+            o.cover.rotation.y = -A;
+            // the first page trails the cover, never passing it or the body
+            const trail = 0.8 + 0.14 * Math.sin(simTime * 5.5 + o.phase) * flutter;
+            o.page.rotation.y = -A * Math.min(trail, 0.96);
+          }
+        }
       }
     }
   }

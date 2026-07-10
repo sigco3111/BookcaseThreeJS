@@ -37,7 +37,7 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.minDistance = 0.8;
 controls.maxDistance = 12;
-controls.maxPolarAngle = Math.PI / 2 + 0.04;
+controls.maxPolarAngle = Math.PI / 2 - 0.01;
 
 // ---- params ---------------------------------------------------------------------
 const params = { ...DEFAULT_PARAMS };
@@ -391,6 +391,7 @@ fBooks.add(bookParams, 'lean', 0, 0.6, 0.01).name('leaning books').onChange(rebu
 fBooks.add(bookParams, 'stacks', 0, 0.6, 0.01).name('flat stacks').onChange(rebuildBooks);
 fBooks.add(bookParams, 'messiness', 0, 1, 0.01).onChange(rebuildBooks);
 fBooks.add(bookParams, 'scale', 0.7, 1.4, 0.01).name('book size').onChange(rebuildBooks);
+fBooks.add(bookParams, 'openChance', 0, 1, 0.05).name('📖 open on fall').onChange(rebuildBooks);
 fBooks.add(bookParams, 'seed', 0, 9999, 1).onChange(rebuildBooks);
 function randomizeBooks() {
   const r = (a, b) => a + Math.random() * (b - a);
@@ -530,6 +531,10 @@ renderer.setAnimationLoop((time) => {
   controls.autoRotate = cameraParams.turntable && !shotTween;
   controls.autoRotateSpeed = cameraParams.speed;
   controls.update();
+
+  // never let orbiting or panning take the view below the floor
+  controls.target.y = Math.max(controls.target.y, 0.08);
+  camera.position.y = Math.max(camera.position.y, 0.08);
 
   studio.update(t);
   booksSys.update(dt);
