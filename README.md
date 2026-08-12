@@ -8,7 +8,7 @@
 
 | 항목 | URL |
 |---|---|
-| 🌐 **라이브 데모** | **<https://bookcasethreejs.vercel.app>** |
+| 🌐 **라이브 데모** | **<https://sigco3111.github.io/BookcaseThreeJS>** |
 | 📦 **이 저장소 (한국어 fork)** | <https://github.com/sigco3111/BookcaseThreeJS> |
 | ⭐ **원본 저장소 (출처)** | <https://github.com/achrefelouafi/BookcaseThreeJS> |
 
@@ -18,7 +18,7 @@
 
 ## ✨ 라이브 데모 둘러보기
 
-브라우저에서 **<https://bookcasethreejs.vercel.app>** 을 열면 즉시 절차적 책장 스튜디오를 만날 수 있습니다.
+브라우저에서 **<https://sigco3111.github.io/BookcaseThreeJS>** 을 열면 즉시 절차적 책장 스튜디오를 만날 수 있습니다.
 
 **조작 방법**
 
@@ -64,7 +64,7 @@
 - **🔄 이중 언어 지원** — `src/i18n.js` 모듈로 한국어 / 영어 토글 가능 (`setLanguage('en')` 호출)
 - **🛡️ 식별자 침투 0건** — Three.js 객체 / cannon-es 시뮬레이션 / lil-gui 컨트롤 / 셰이더 유니폼 모두 원본 그대로 보존
 - **✅ Vite 빌드 통과** — `pnpm build` exit 0, 972KB / 295KB gzip
-- **🚀 Vercel 프로덕션 배포** — `<https://bookcasethreejs.vercel.app>`
+- **🚀 Vercel 프로덕션 배포** — `<https://sigco3111.github.io/BookcaseThreeJS>`
 
 ### 한국어화 번역 매핑 예시
 
@@ -310,7 +310,7 @@ fCase.add(params, 'back', ['planks', 'flat', 'open'])  // ← 영문 키 보존
 
 ### 6️⃣ Vercel 자동 도메인 사용
 
-CLI 가 준 첫 URL (`bookcasethreejs-ejggr1qbw-...`) 은 Production Deployment Protection SSO 가드가 걸려 302 → 로그인 리다이렉트. **자동 할당된 production 도메인** (`bookcasethreejs.vercel.app`) 은 보호 없음.
+CLI 가 준 첫 URL (`bookcasethreejs-ejggr1qbw-...`) 은 Production Deployment Protection SSO 가드가 걸려 302 → 로그인 리다이렉트. **자동 할당된 production 도메인** (`sigco3111.github.io/BookcaseThreeJS`) 은 보호 없음.
 
 ---
 
@@ -377,6 +377,6 @@ SOFTWARE.
 | **원본 HEAD** | (원본 저장소 마지막 커밋) |
 | **한국어 fork HEAD** | (feat: 한글화 + i18n.js) |
 | **배포 플랫폼** | Vercel |
-| **라이브 도메인** | <https://bookcasethreejs.vercel.app> |
+| **라이브 도메인** | <https://sigco3111.github.io/BookcaseThreeJS> |
 
 📚 **즐거운 책장 디자인 되세요!**
