@@ -8,6 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import GUI from 'lil-gui';
+import { t } from './i18n.js';
 import { createWoodMaterial, createBookMaterials, addDustLayer } from './materials.js';
 import { buildBookcase, disposeGroup, DEFAULT_PARAMS } from './bookcase.js';
 import { createStudio, createContactShadow, MOODS } from './studio.js';
@@ -340,36 +341,36 @@ function randomize() {
   rebuild();
 }
 
-const gui = new GUI({ title: 'Bookcase Studio' });
+const gui = new GUI({ title: t('guiTitle') });
 
-const fCase = gui.addFolder('Bookcase Settings');
+const fCase = gui.addFolder(t('folderCase'));
 // dimensions
-fCase.add(params, 'width', 0.7, 3.2, 0.01).name('width (m)').onChange(rebuild);
-fCase.add(params, 'height', 1.2, 3.0, 0.01).name('height (m)').onChange(rebuild);
-fCase.add(params, 'depth', 0.24, 0.6, 0.005).name('depth (m)').onChange(rebuild);
+fCase.add(params, 'width', 0.7, 3.2, 0.01).name(t('width')).onChange(rebuild);
+fCase.add(params, 'height', 1.2, 3.0, 0.01).name(t('height')).onChange(rebuild);
+fCase.add(params, 'depth', 0.24, 0.6, 0.005).name(t('depth')).onChange(rebuild);
 // layout
-fCase.add(params, 'shelves', 0, 8, 1).onChange(rebuild);
-fCase.add(params, 'separations', 0, 4, 1).onChange(rebuild);
+fCase.add(params, 'shelves', 0, 8, 1).name(t('shelves')).onChange(rebuild);
+fCase.add(params, 'separations', 0, 4, 1).name(t('separations')).onChange(rebuild);
 // construction
-fCase.add(params, 'thickness', 0.018, 0.045, 0.001).name('board thickness').onChange(rebuild);
-fCase.add(params, 'baseHeight', 0.06, 0.22, 0.005).name('plinth height').onChange(rebuild);
-fCase.add(params, 'crown').name('crown molding').onChange(rebuild);
-fCase.add(params, 'faceFrame').name('face frame').onChange(rebuild);
-fCase.add(params, 'sidePanels').name('side insets').onChange(rebuild);
-fCase.add(params, 'back', ['planks', 'flat', 'open']).name('back style').onChange(rebuild);
+fCase.add(params, 'thickness', 0.018, 0.045, 0.001).name(t('boardThickness')).onChange(rebuild);
+fCase.add(params, 'baseHeight', 0.06, 0.22, 0.005).name(t('plinthHeight')).onChange(rebuild);
+fCase.add(params, 'crown').name(t('crownMolding')).onChange(rebuild);
+fCase.add(params, 'faceFrame').name(t('faceFrame')).onChange(rebuild);
+fCase.add(params, 'sidePanels').name(t('sideInsets')).onChange(rebuild);
+fCase.add(params, 'back', ['planks', 'flat', 'open']).name(t('backStyle')).onChange(rebuild);
 // finish
-fCase.addColor(style, 'tint').onChange((v) => wood.color.set(v));
+fCase.addColor(style, 'tint').name(t('dustColor').replace('먼지 색상', '결 색상')).onChange((v) => wood.color.set(v));
 fCase.add(style, 'roughness', 0.4, 1.5, 0.01).onChange((v) => { wood.roughness = v; });
-fCase.add(params, 'grainScale', 0.5, 2.5, 0.01).name('grain scale').onChange(rebuild);
-fCase.add(params, 'grainFlip').name('grain direction').onChange(rebuild);
-fCase.add({ randomize }, 'randomize').name('🎲 randomize');
+fCase.add(params, 'grainScale', 0.5, 2.5, 0.01).name(t('grainScale')).onChange(rebuild);
+fCase.add(params, 'grainFlip').name(t('grainDirection')).onChange(rebuild);
+fCase.add({ randomize }, 'randomize').name(t('randomize'));
 fCase.close();
 
-const fBooks = gui.addFolder('Books');
-fBooks.add(bookParams, 'enabled').name('📚 books').onChange(rebuildBooks);
-const fRamp = fBooks.addFolder('color ramp');
+const fBooks = gui.addFolder(t('folderBooks'));
+fBooks.add(bookParams, 'enabled').name(t('books')).onChange(rebuildBooks);
+const fRamp = fBooks.addFolder(t('folderColorRamp'));
 Object.keys(bookParams.ramp).forEach((k, i) => {
-  fRamp.addColor(bookParams.ramp, k).name(`stop ${i + 1}`).onChange(rebuildBooks);
+  fRamp.addColor(bookParams.ramp, k).name(t('colorStop', i + 1)).onChange(rebuildBooks);
 });
 function randomizeBookColors() {
   const c = new THREE.Color();
@@ -383,16 +384,16 @@ function randomizeBookColors() {
   gui.controllersRecursive().forEach((ctrl) => ctrl.updateDisplay());
   rebuildBooks();
 }
-fRamp.add({ randomizeBookColors }, 'randomizeBookColors').name('🎲 randomize colors');
+fRamp.add({ randomizeBookColors }, 'randomizeBookColors').name(t('randomizeColors'));
 fRamp.close();
-fBooks.add(bookParams, 'darkness', 0, 1, 0.01).onChange(rebuildBooks);
-fBooks.add(bookParams, 'density', 0.1, 1, 0.01).onChange(rebuildBooks);
-fBooks.add(bookParams, 'lean', 0, 0.6, 0.01).name('leaning books').onChange(rebuildBooks);
-fBooks.add(bookParams, 'stacks', 0, 0.6, 0.01).name('flat stacks').onChange(rebuildBooks);
-fBooks.add(bookParams, 'messiness', 0, 1, 0.01).onChange(rebuildBooks);
-fBooks.add(bookParams, 'scale', 0.7, 1.4, 0.01).name('book size').onChange(rebuildBooks);
-fBooks.add(bookParams, 'openChance', 0, 1, 0.05).name('📖 open on fall').onChange(rebuildBooks);
-fBooks.add(bookParams, 'seed', 0, 9999, 1).onChange(rebuildBooks);
+fBooks.add(bookParams, 'darkness', 0, 1, 0.01).name(t('darkness')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'density', 0.1, 1, 0.01).name(t('density')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'lean', 0, 0.6, 0.01).name(t('leaningBooks')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'stacks', 0, 0.6, 0.01).name(t('flatStacks')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'messiness', 0, 1, 0.01).name(t('messiness')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'scale', 0.7, 1.4, 0.01).name(t('bookSize')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'openChance', 0, 1, 0.05).name(t('openOnFall')).onChange(rebuildBooks);
+fBooks.add(bookParams, 'seed', 0, 9999, 1).name(t('seed')).onChange(rebuildBooks);
 function randomizeBooks() {
   const r = (a, b) => a + Math.random() * (b - a);
   bookParams.seed = Math.floor(Math.random() * 10000);
@@ -404,9 +405,9 @@ function randomizeBooks() {
   gui.controllersRecursive().forEach((c) => c.updateDisplay());
   rebuildBooks();
 }
-fBooks.add({ randomizeBooks }, 'randomizeBooks').name('🎲 randomize books');
-fBooks.add(bookParams, 'grab').name('✋ grab & throw');
-fBooks.add(bookParams, 'throwPower', 0.5, 3, 0.05).name('throw power');
+fBooks.add({ randomizeBooks }, 'randomizeBooks').name(t('randomizeBooks'));
+fBooks.add(bookParams, 'grab').name(t('grabThrow'));
+fBooks.add(bookParams, 'throwPower', 0.5, 3, 0.05).name(t('throwPower'));
 fBooks.add({
   quake: () => {
     booksSys.bookquake();
@@ -417,60 +418,60 @@ fBooks.add({
       180
     );
   },
-}, 'quake').name('💥 bookquake');
-fBooks.add({ reset: rebuildBooks }, 'reset').name('↩ reset books');
+}, 'quake').name(t('bookquake'));
+fBooks.add({ reset: rebuildBooks }, 'reset').name(t('resetBooks'));
 fBooks.close();
 
-const fDust = gui.addFolder('Dust');
+const fDust = gui.addFolder(t('folderDust'));
 const dustChanged = () => dustFX.refresh();
-fDust.add(dustParams, 'enabled').name('🌫 dust').onChange(dustChanged);
-fDust.add(dustParams, 'surface', 0, 1, 0.01).name('settled dust').onChange(dustChanged);
-fDust.add(dustParams, 'patchiness', 0, 1, 0.01).onChange(dustChanged);
-fDust.add(dustParams, 'scale', 0.5, 20, 0.05).name('patch size').onChange(dustChanged);
-fDust.add(dustParams, 'topBias', 0.5, 6, 0.05).name('top-surface bias').onChange(dustChanged);
-fDust.addColor(dustParams, 'color').name('dust color').onChange(dustChanged);
-fDust.add(studioParams, 'dust', 0, 1, 0.01).name('ambient motes').onChange((v) => {
+fDust.add(dustParams, 'enabled').name(t('dust')).onChange(dustChanged);
+fDust.add(dustParams, 'surface', 0, 1, 0.01).name(t('settledDust')).onChange(dustChanged);
+fDust.add(dustParams, 'patchiness', 0, 1, 0.01).name(t('patchiness')).onChange(dustChanged);
+fDust.add(dustParams, 'scale', 0.5, 20, 0.05).name(t('patchSize')).onChange(dustChanged);
+fDust.add(dustParams, 'topBias', 0.5, 6, 0.05).name(t('topSurfaceBias')).onChange(dustChanged);
+fDust.addColor(dustParams, 'color').name(t('dustColor')).onChange(dustChanged);
+fDust.add(studioParams, 'dust', 0, 1, 0.01).name(t('ambientMotes')).onChange((v) => {
   studio.dust.material.opacity = v;
   studio.dust.points.visible = v > 0.001;
 });
-fDust.add(dustParams, 'puffs').name('💨 impact puffs');
-fDust.add(dustParams, 'puffDensity', 0.2, 3, 0.05).name('puff density');
-fDust.add(dustParams, 'puffSize', 0.5, 3, 0.05).name('puff size').onChange(dustChanged);
-fDust.add(dustParams, 'puffOpacity', 0.05, 0.6, 0.01).name('puff opacity').onChange(dustChanged);
-fDust.add(dustParams, 'puffLife', 0.5, 4, 0.05).name('puff lifetime');
+fDust.add(dustParams, 'puffs').name(t('impactPuffs'));
+fDust.add(dustParams, 'puffDensity', 0.2, 3, 0.05).name(t('puffDensity'));
+fDust.add(dustParams, 'puffSize', 0.5, 3, 0.05).name(t('puffSize')).onChange(dustChanged);
+fDust.add(dustParams, 'puffOpacity', 0.05, 0.6, 0.01).name(t('puffOpacity')).onChange(dustChanged);
+fDust.add(dustParams, 'puffLife', 0.5, 4, 0.05).name(t('puffLifetime'));
 fDust.add({
   burst: () => dustFX.burst(
     new THREE.Vector3(0, params.height * 0.55, 0.15),
     Math.max(params.width * 0.6, 0.6),
     160
   ),
-}, 'burst').name('💨 dust burst');
+}, 'burst').name(t('dustBurst'));
 fDust.close();
 
-const fCam = gui.addFolder('Camera');
-fCam.add({ hero: () => flyTo('hero') }, 'hero').name('🎬 hero shot');
-fCam.add({ low: () => flyTo('low') }, 'low').name('🎬 low angle');
-fCam.add({ detail: () => flyTo('detail') }, 'detail').name('🎬 close-up');
-fCam.add({ front: () => flyTo('front') }, 'front').name('🎬 front');
-fCam.add(cameraParams, 'fov', 18, 60, 0.5).onChange((v) => {
+const fCam = gui.addFolder(t('folderCamera'));
+fCam.add({ hero: () => flyTo('hero') }, 'hero').name(t('heroShot'));
+fCam.add({ low: () => flyTo('low') }, 'low').name(t('lowAngle'));
+fCam.add({ detail: () => flyTo('detail') }, 'detail').name(t('closeUp'));
+fCam.add({ front: () => flyTo('front') }, 'front').name(t('front'));
+fCam.add(cameraParams, 'fov', 18, 60, 0.5).name(t('fov')).onChange((v) => {
   camera.fov = v;
   camera.updateProjectionMatrix();
 });
-fCam.add(cameraParams, 'turntable');
-fCam.add(cameraParams, 'speed', 0.2, 5, 0.1).name('turntable speed');
+fCam.add(cameraParams, 'turntable').name(t('turntable'));
+fCam.add(cameraParams, 'speed', 0.2, 5, 0.1).name(t('turntableSpeed'));
 fCam.close();
 
-const fStudio = gui.addFolder('Studio');
-fStudio.add(studioParams, 'mood', Object.keys(MOODS)).onChange(applyMood);
-fStudio.add(studioParams, 'keyLight', 0, 250, 1).onChange((v) => { studio.key.intensity = v; });
-fStudio.add(studioParams, 'fillLight', 0, 12, 0.1).onChange((v) => { studio.fill.intensity = v; });
-fStudio.add(studioParams, 'rimLight', 0, 40, 0.1).onChange((v) => { studio.rim.intensity = v; });
-fStudio.add(studioParams, 'haze', 0, 0.5, 0.005).onChange((v) => {
+const fStudio = gui.addFolder(t('folderStudio'));
+fStudio.add(studioParams, 'mood', Object.keys(MOODS)).name(t('mood')).onChange(applyMood);
+fStudio.add(studioParams, 'keyLight', 0, 250, 1).name(t('keyLight')).onChange((v) => { studio.key.intensity = v; });
+fStudio.add(studioParams, 'fillLight', 0, 12, 0.1).name(t('fillLight')).onChange((v) => { studio.fill.intensity = v; });
+fStudio.add(studioParams, 'rimLight', 0, 40, 0.1).name(t('rimLight')).onChange((v) => { studio.rim.intensity = v; });
+fStudio.add(studioParams, 'haze', 0, 0.5, 0.005).name(t('haze')).onChange((v) => {
   studio.shaft.material.uniforms.uOpacity.value = v;
   studio.shaft.mesh.visible = v > 0.001;
 });
-fStudio.add(studioParams, 'exposure', 0.3, 2, 0.01).onChange((v) => { renderer.toneMappingExposure = v; });
-fStudio.addColor(studioParams, 'backdrop').onChange((v) => {
+fStudio.add(studioParams, 'exposure', 0.3, 2, 0.01).name(t('exposure')).onChange((v) => { renderer.toneMappingExposure = v; });
+fStudio.addColor(studioParams, 'backdrop').name(t('backdrop')).onChange((v) => {
   studio.cyc.material.color.set(v);
   studio.setFloorHorizon(v);
   scene.background.set(v);
@@ -478,25 +479,25 @@ fStudio.addColor(studioParams, 'backdrop').onChange((v) => {
 });
 fStudio.close();
 
-const fFX = gui.addFolder('FX');
-fFX.add(fxParams, 'bloom', 0, 1.5, 0.01).name('bloom strength').onChange((v) => { bloomPass.strength = v; });
-fFX.add(fxParams, 'bloomRadius', 0, 1, 0.01).name('bloom radius').onChange((v) => { bloomPass.radius = v; });
-fFX.add(fxParams, 'bloomThreshold', 0, 1.5, 0.01).name('bloom threshold').onChange((v) => { bloomPass.threshold = v; });
-fFX.add(fxParams, 'ao').name('ambient occlusion').onChange((v) => { gtaoPass.enabled = v; });
-fFX.add(fxParams, 'aoIntensity', 0, 1, 0.01).name('ao intensity').onChange((v) => { gtaoPass.blendIntensity = v; });
-fFX.add(fxParams, 'aoRadius', 0.05, 1, 0.01).name('ao radius').onChange((v) => {
+const fFX = gui.addFolder(t('folderFX'));
+fFX.add(fxParams, 'bloom', 0, 1.5, 0.01).name(t('bloomStrength')).onChange((v) => { bloomPass.strength = v; });
+fFX.add(fxParams, 'bloomRadius', 0, 1, 0.01).name(t('bloomRadius')).onChange((v) => { bloomPass.radius = v; });
+fFX.add(fxParams, 'bloomThreshold', 0, 1.5, 0.01).name(t('bloomThreshold')).onChange((v) => { bloomPass.threshold = v; });
+fFX.add(fxParams, 'ao').name(t('ambientOcclusion')).onChange((v) => { gtaoPass.enabled = v; });
+fFX.add(fxParams, 'aoIntensity', 0, 1, 0.01).name(t('aoIntensity')).onChange((v) => { gtaoPass.blendIntensity = v; });
+fFX.add(fxParams, 'aoRadius', 0.05, 1, 0.01).name(t('aoRadius')).onChange((v) => {
   gtaoPass.updateGtaoMaterial({ radius: v });
 });
-fFX.add(fxParams, 'dof').name('depth of field').onChange((v) => { bokehPass.enabled = v; });
-fFX.add(fxParams, 'aperture', 0, 0.01, 0.0001).onChange((v) => { bokehPass.uniforms.aperture.value = v; });
-fFX.add(fxParams, 'maxblur', 0, 0.02, 0.0005).name('max blur').onChange((v) => { bokehPass.uniforms.maxblur.value = v; });
-fFX.add(fxParams, 'chroma', 0, 1, 0.01).name('chromatic aberration').onChange((v) => { gradePass.uniforms.uChroma.value = v; });
-fFX.add(fxParams, 'saturation', 0, 2, 0.01).onChange((v) => { gradePass.uniforms.uSaturation.value = v; });
-fFX.add(fxParams, 'contrast', 0.5, 1.5, 0.01).onChange((v) => { gradePass.uniforms.uContrast.value = v; });
-fFX.add(fxParams, 'temperature', -1, 1, 0.01).onChange((v) => { gradePass.uniforms.uTemperature.value = v; });
-fFX.add(fxParams, 'vignette', 0, 1, 0.01).onChange((v) => { gradePass.uniforms.uVignette.value = v; });
-fFX.add(fxParams, 'grain', 0, 0.15, 0.001).onChange((v) => { gradePass.uniforms.uGrain.value = v; });
-fFX.add(fxParams, 'letterbox', 0, 0.2, 0.005).onChange((v) => { gradePass.uniforms.uLetterbox.value = v; });
+fFX.add(fxParams, 'dof').name(t('depthOfField')).onChange((v) => { bokehPass.enabled = v; });
+fFX.add(fxParams, 'aperture', 0, 0.01, 0.0001).name(t('aperture')).onChange((v) => { bokehPass.uniforms.aperture.value = v; });
+fFX.add(fxParams, 'maxblur', 0, 0.02, 0.0005).name(t('maxBlur')).onChange((v) => { bokehPass.uniforms.maxblur.value = v; });
+fFX.add(fxParams, 'chroma', 0, 1, 0.01).name(t('chromaticAberration')).onChange((v) => { gradePass.uniforms.uChroma.value = v; });
+fFX.add(fxParams, 'saturation', 0, 2, 0.01).name(t('saturation')).onChange((v) => { gradePass.uniforms.uSaturation.value = v; });
+fFX.add(fxParams, 'contrast', 0.5, 1.5, 0.01).name(t('contrast')).onChange((v) => { gradePass.uniforms.uContrast.value = v; });
+fFX.add(fxParams, 'temperature', -1, 1, 0.01).name(t('temperature')).onChange((v) => { gradePass.uniforms.uTemperature.value = v; });
+fFX.add(fxParams, 'vignette', 0, 1, 0.01).name(t('vignette')).onChange((v) => { gradePass.uniforms.uVignette.value = v; });
+fFX.add(fxParams, 'grain', 0, 0.15, 0.001).name(t('grain')).onChange((v) => { gradePass.uniforms.uGrain.value = v; });
+fFX.add(fxParams, 'letterbox', 0, 0.2, 0.005).name(t('letterbox')).onChange((v) => { gradePass.uniforms.uLetterbox.value = v; });
 fFX.close();
 
 applyMood(studioParams.mood);
